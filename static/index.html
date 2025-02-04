@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ArXiv Explorer</title>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --surface: #ffffff;
+      --background: #f1f5f9;
+      --text: #1e293b;
+      --border: #e2e8f0;
+      --error: #ef4444;
+      --success: #22c55e;
+      --accent: #4f46e5;
+      --highlight: #ffd700;
+      --transition-speed: 0.3s;
+    }
+    /* Dark mode & High Contrast */
+    .dark-mode {
+      --surface: #1e293b;
+      --background: #0f172a;
+      --text: #f1f5f9;
+      --border: #334155;
+    }
+    .high-contrast {
+      --background: #000;
+      --text: #fff;
+      --surface: #000;
+      --primary: #fff;
+      --border: #fff;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--background);
+      color: var(--text);
+      line-height: 1.6;
+      transition: background var(--transition-speed), color var(--transition-speed);
+    }
+    a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+    a:focus, button:focus, input:focus {
+      outline: 2px dashed var(--primary);
+      outline-offset: 2px;
+    }
+    #app {
+      max-width: 1024px;
+      margin: 0 auto;
+      padding: 24px;
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 24px;
+    }
+    @media (max-width: 768px) {
+      #app {
+        grid-template-columns: 1fr;
+      }
+      /* Bottom navigation bar for mobile */
+      .bottom-nav {
+        display: flex;
+        justify-content: space-around;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+        padding: 10px 0;
+      }
+      .bottom-nav button {
+        flex: 1;
+        font-size: 16px;
+        padding: 10px;
+      }
+    }
+    .sidebar {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      height: fit-content;
+    }
+    .sidebar .search-container {
+      margin-bottom: 16px;
+    }
+    .search-input {
+      width: 100%;
+      padding: 14px 18px;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      font-size: 16px;
+      transition: border-color 0.2s;
+      margin-bottom: 16px;
+    }
+    .search-input:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+    /* Category Pills */
+    .pill {
+      display: inline-block;
+      padding: 6px 12px;
+      margin: 4px 4px 4px 0;
+      border-radius: 999px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background-color 0.2s, color 0.2s;
+      background: #f1f5f9;
+      color: var(--text);
+      position: relative;
+    }
+    .pill:hover {
+      background: #e2e8f0;
+    }
+    .pill.active {
+      background: var(--primary);
+      color: #fff;
+    }
+    /* Example subject-specific shades */
+    .pill.cs { background: #e0ecff; }
+    .pill.cs.active { background: #2563eb; }
+    .pill.cs-ai { background: #cce5ff; }
+    .pill.cs-ai.active { background: #1d4ed8; }
+    .pill.eess { background: #e0ffe6; }
+    .pill.eess.active { background: #22c55e; }
+    .pill.default { background: #fce7f3; }
+    .pill.default.active { background: var(--accent); }
+    /* Tooltip for full category name */
+    .pill[aria-label]::after {
+      content: attr(aria-label);
+      position: absolute;
+      bottom: -24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--text);
+      color: var(--background);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+      white-space: nowrap;
+    }
+    .pill:hover[aria-label]::after {
+      opacity: 1;
+    }
+    /* Paper Card */
+    .paper-card {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      transition: transform var(--transition-speed), opacity var(--transition-speed);
+      position: relative;
+    }
+    .paper-card.swiped {
+      opacity: 0;
+      transform: translateX(100%);
+    }
+    .paper-meta {
+      color: #64748b;
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+    .paper-title {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: all 0.2s;
+    }
+    .paper-title:hover {
+      white-space: normal;
+      background: rgba(0,0,0,0.05);
+    }
+    .paper-authors {
+      color: #64748b;
+      margin-bottom: 16px;
+      font-size: 15px;
+    }
+    .paper-abstract {
+      font-size: 15px;
+      line-height: 1.6;
+      color: #374151;
+      max-height: 3.6em;
+      overflow: hidden;
+      transition: max-height 0.3s;
+    }
+    .paper-abstract.expanded {
+      max-height: none;
+    }
+    .read-more {
+      font-size: 13px;
+      color: var(--primary);
+      cursor: pointer;
+      margin-top: 4px;
+    }
+    .action-buttons {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+      justify-content: flex-end;
+    }
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: transform 0.2s, opacity 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn:hover {
+      transform: translateY(-1px);
+    }
+    .btn:active {
+      transform: translateY(0);
+    }
+    .btn-skip {
+      background: #f1f5f9;
+      color: #64748b;
+    }
+    .btn-save {
+      background: var(--primary);
+      color: white;
+    }
+    .btn-preview {
+      background: var(--accent);
+      color: white;
+    }
+    /* Saved Papers Section */
+    .saved-papers {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .saved-papers h2 {
+      font-size: 18px;
+      margin-bottom: 16px;
+      color: var(--text);
+    }
+    .saved-controls {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .saved-controls input[type="text"],
+    .saved-controls select,
+    .saved-controls button {
+      padding: 6px 10px;
+      font-size: 14px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--surface);
+      cursor: pointer;
+    }
+    .saved-list {
+      margin-top: 12px;
+    }
+    .saved-paper-item {
+      padding: 12px;
+      border-radius: 8px;
+      background: #f8fafc;
+      margin-bottom: 8px;
+      transition: background-color 0.2s;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      position: relative;
+    }
+    .saved-paper-item:hover {
+      background: #f1f5f9;
+    }
+    .saved-paper-title {
+      font-weight: 500;
+      color: var(--text);
+    }
+    .saved-paper-authors,
+    .saved-paper-meta {
+      font-size: 13px;
+      color: #64748b;
+    }
+    .open-link {
+      font-size: 14px;
+      color: var(--primary);
+      text-decoration: none;
+      margin-top: 4px;
+      font-weight: bold;
+    }
+    .open-link:hover {
+      text-decoration: underline;
+    }
+    .copy-btn, .note-btn, .favorite-btn, .delete-btn {
+      margin-top: 4px;
+      font-size: 13px;
+      background: #e2e8f0;
+      border: none;
+      border-radius: 4px;
+      padding: 4px 8px;
+      cursor: pointer;
+    }
+    .copy-btn:hover, .note-btn:hover, .favorite-btn:hover, .delete-btn:hover {
+      background: #cbd5e1;
+    }
+    .bulk-select {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+    }
+    .note-area {
+      margin-top: 6px;
+      padding: 6px;
+      font-size: 13px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      display: none;
+    }
+    .has-note::after {
+      content: '📝';
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      font-size: 18px;
+    }
+    /* Collapsible saved papers sections */
+    .collapse-toggle {
+      cursor: pointer;
+      font-size: 14px;
+      color: var(--primary);
+      margin-bottom: 8px;
+    }
+    /* Toast messages */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 12px 24px;
+      border-radius: 8px;
+      color: white;
+      font-weight: 500;
+      opacity: 0;
+      transform: translateY(100%);
+      transition: opacity 0.3s, transform 0.3s;
+      z-index: 1000;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .toast.success {
+      background: var(--success);
+    }
+    .toast.error {
+      background: var(--error);
+    }
+    /* Dark mode toggle styling */
+    .dark-mode-toggle, .high-contrast-toggle {
+      margin-top: 12px;
+      padding: 6px 10px;
+      font-size: 14px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--surface);
+      cursor: pointer;
+      display: inline-block;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- Initial loading screen -->
+    <div class="loading" id="initial-loading" aria-live="polite">
+      <div class="loading-spinner"></div>
+      <span>Loading papers...</span>
+    </div>
+  </div>
+
+  <script>
+    // Helper: debounce function
+    const debounce = (fn, delay) => {
+      let timer;
+      return (...args) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn(...args), delay);
+      };
+    };
+
+    class ArxivExplorer {
+      constructor() {
+        // Papers fetched from arXiv
+        this.papers = [];
+        // Saved papers (later swap for IndexedDB if needed)
+        this.savedPapers = JSON.parse(localStorage.getItem('savedPapers') || '[]');
+        this.categories = new Set();
+        this.activeCategories = new Set();
+        this.categoryCounts = {};
+        this.currentIndex = 0;
+        this.isLoading = false;
+        // Sorting/filtering for saved papers
+        this.savedSortBy = 'date';
+        this.savedFilter = '';
+        // For undoing a skip (store last index and paper)
+        this.lastSkipped = null;
+        // Bulk selection for saved papers
+        this.bulkSelected = new Set();
+        // Collapse state for saved section
+        this.savedCollapsed = false;
+        // Cached DOM element
+        this.$app = document.getElementById('app');
+        // Read persistent dark mode/high contrast preference
+        this.darkMode = localStorage.getItem('darkMode') === 'true';
+        this.highContrast = localStorage.getItem('highContrast') === 'true';
+        if (this.darkMode) document.body.classList.add('dark-mode');
+        if (this.highContrast) document.body.classList.add('high-contrast');
+      }
+
+      async init() {
+        document.addEventListener('keydown', this.handleKeyPress.bind(this));
+        this.render();
+        await this.fetchPapers('machine learning');
+        this.addSwipeListeners();
+        this.addPullToRefresh(); // placeholder for mobile pull-to-refresh
+      }
+
+      async fetchPapers(query) {
+        this.isLoading = true;
+        this.render();
+        try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 15000);
+          const response = await fetch(`/api/papers?q=${encodeURIComponent(query)}`, {
+            signal: controller.signal,
+          });
+          clearTimeout(timeout);
+          if (!response.ok) throw new Error('Failed to fetch papers');
+          this.papers = await response.json();
+          this.currentIndex = 0;
+          this.extractCategories();
+        } catch (error) {
+          this.showToast(
+            error.name === 'AbortError'
+              ? 'Request timeout – server took too long'
+              : 'Error loading papers: ' + error.message,
+            'error'
+          );
+          if (!this.papers.length) {
+            this.papers = [{
+              id: 'default',
+              title: 'Could not load papers',
+              abstract: 'Please try again or check your connection.',
+              authors: ['System'],
+              category: 'error',
+              date: new Date().toISOString().split('T')[0]
+            }];
+          }
+        } finally {
+          this.isLoading = false;
+          this.render();
+        }
+      }
+
+      extractCategories() {
+        this.categoryCounts = {};
+        this.categories = new Set();
+        this.papers.forEach(p => {
+          this.categoryCounts[p.category] = (this.categoryCounts[p.category] || 0) + 1;
+          this.categories.add(p.category);
+        });
+      }
+
+      handleKeyPress(e) {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        if (e.key === 'ArrowLeft') {
+          this.handleAction('skip');
+        } else if (e.key === 'ArrowRight') {
+          this.handleAction('save');
+        } else if (e.key.toLowerCase() === 's') {
+          const searchInput = document.querySelector('.search-input');
+          if (searchInput) searchInput.focus();
+        }
+      }
+
+      handleAction(action) {
+        if (this.currentIndex >= this.papers.length) return;
+        const paper = this.papers[this.currentIndex];
+        if (action === 'save') {
+          this.savedPapers.unshift(paper);
+          localStorage.setItem('savedPapers', JSON.stringify(this.savedPapers));
+          this.showToast('Paper saved!', 'success');
+        } else if (action === 'skip') {
+          this.lastSkipped = { index: this.currentIndex, paper };
+          this.currentIndex++;
+          this.showToast('Paper skipped. Click to undo.', 'success', () => {
+            if (this.lastSkipped) {
+              this.currentIndex = this.lastSkipped.index;
+              this.lastSkipped = null;
+              this.render();
+            }
+          });
+        }
+        const card = document.getElementById('paper-card');
+        if (card) {
+          card.classList.add('swiped');
+          setTimeout(() => this.render(), 300);
+        } else {
+          this.render();
+        }
+      }
+
+      // Toggle abstract expansion
+      toggleAbstract(e) {
+        const absEl = e.target.previousElementSibling;
+        if (absEl) {
+          absEl.classList.toggle('expanded');
+          e.target.textContent = absEl.classList.contains('expanded') ? 'Show Less' : 'Read More';
+        }
+      }
+
+      // Copy a dummy BibTeX citation to clipboard
+      copyCitation(paper) {
+        const citation = `@article{${paper.id.replace(/[^\w]/g, '')},
+  title = {${paper.title}},
+  author = {${paper.authors.join(' and ')}},
+  year = {${paper.date.split('-')[0]}}
+}`;
+        navigator.clipboard.writeText(citation).then(() => {
+          this.showToast('Citation copied!', 'success');
+        });
+      }
+
+      // Toggle dark mode and persist preference
+      toggleDarkMode() {
+        this.darkMode = !this.darkMode;
+        document.body.classList.toggle('dark-mode');
+        localStorage.setItem('darkMode', this.darkMode);
+      }
+
+      // Toggle high contrast mode and persist preference
+      toggleHighContrast() {
+        this.highContrast = !this.highContrast;
+        document.body.classList.toggle('high-contrast');
+        localStorage.setItem('highContrast', this.highContrast);
+      }
+
+      // Toggle collapse for saved papers
+      toggleSavedCollapse() {
+        this.savedCollapsed = !this.savedCollapsed;
+        this.render();
+      }
+
+      getFilteredPapers() {
+        if (this.activeCategories.size === 0) return this.papers;
+        return this.papers.filter(p => this.activeCategories.has(p.category));
+      }
+
+      getProcessedSavedPapers() {
+        let saved = [...this.savedPapers];
+        if (this.savedFilter) {
+          const filter = this.savedFilter.toLowerCase();
+          saved = saved.filter(p => p.title.toLowerCase().includes(filter) ||
+                                      p.authors.join(', ').toLowerCase().includes(filter));
+        }
+        if (this.savedSortBy === 'date') {
+          saved.sort((a, b) => new Date(b.date) - new Date(a.date));
+        } else if (this.savedSortBy === 'category') {
+          saved.sort((a, b) => a.category.localeCompare(b.category));
+        }
+        return saved;
+      }
+
+      // Placeholder: add pull-to-refresh for mobile
+      addPullToRefresh() {
+        // You might integrate a library here. For now, we simply log.
+        console.log('Pull-to-refresh enabled (placeholder)');
+      }
+
+      render() {
+        window.requestAnimationFrame(() => {
+          if (this.isLoading && !this.papers.length) {
+            this.$app.innerHTML = `
+              <div class="loading" id="initial-loading" aria-live="polite">
+                <div class="loading-spinner"></div>
+                <span>Loading papers...</span>
+              </div>`;
+            return;
+          }
+          const filteredPapers = this.getFilteredPapers();
+          const currentPaper = filteredPapers[this.currentIndex];
+          // Sidebar with search, category pills, and toggles
+          const sidebarHTML = `
+            <div class="sidebar">
+              <div class="search-container">
+                <input type="text" class="search-input" placeholder="Search papers..." aria-label="Search papers" value="" />
+              </div>
+              <div class="categories">
+                ${Array.from(this.categories).map(cat => {
+                  let subjectClass = 'default';
+                  if (cat.toLowerCase().startsWith('cs.ai')) subjectClass = 'cs-ai';
+                  else if (cat.toLowerCase().startsWith('cs')) subjectClass = 'cs';
+                  else if (cat.toLowerCase().startsWith('eess')) subjectClass = 'eess';
+                  return `<span class="pill ${subjectClass} ${this.activeCategories.has(cat) ? 'active' : ''}" data-category="${cat}" aria-label="Category: ${cat}">
+                            ${cat} <strong>(${this.categoryCounts[cat] || 0})</strong>
+                          </span>`;
+                }).join('')}
+              </div>
+              <div class="keyboard-shortcuts">
+                <h3>Keyboard Shortcuts</h3>
+                <div class="shortcut-item" title="Save paper (→)">
+                  <span>Save</span> <span class="shortcut-key">→</span>
+                </div>
+                <div class="shortcut-item" title="Skip paper (←)">
+                  <span>Skip</span> <span class="shortcut-key">←</span>
+                </div>
+                <div class="shortcut-item" title="Focus search (S)">
+                  <span>Search</span> <span class="shortcut-key">S</span>
+                </div>
+              </div>
+              <div class="dark-mode-toggle" id="dark-mode-toggle" tabindex="0" role="button">Toggle Dark Mode</div>
+              <div class="high-contrast-toggle" id="high-contrast-toggle" tabindex="0" role="button">High Contrast</div>
+            </div>`;
+
+          // Main content: paper card and saved papers section
+          const mainContentHTML = `
+            <div class="main-content">
+              ${this.isLoading ? `
+                <div class="loading">
+                  <div class="loading-spinner"></div>
+                  <span>Loading papers...</span>
+                </div>` : currentPaper ? `
+                <div class="paper-card" id="paper-card">
+                  <div class="paper-meta">${currentPaper.category} • ${currentPaper.date}</div>
+                  <h2 class="paper-title" title="${currentPaper.title}">${currentPaper.title}</h2>
+                  <div class="paper-authors">${currentPaper.authors.join(', ')}</div>
+                  <div class="paper-abstract" id="paper-abstract">${currentPaper.abstract}</div>
+                  <div class="read-more" id="read-more" role="button" tabindex="0">Read More</div>
+                  <div class="action-buttons">
+                    <button class="btn btn-skip" data-action="skip" aria-label="Skip Paper">Skip</button>
+                    <button class="btn btn-save" data-action="save" aria-label="Save Paper">Save</button>
+                    <button class="btn btn-preview" data-action="preview" aria-label="Preview PDF">Preview PDF</button>
+                  </div>
+                </div>` : `
+                <div class="no-results">No papers match your criteria.</div>`}
+              <div class="saved-papers">
+                <h2>Saved Papers (${this.savedPapers.length})</h2>
+                <div class="collapse-toggle" role="button" tabindex="0" aria-label="Toggle Saved Papers" onclick="app.toggleSavedCollapse()">
+                  ${this.savedCollapsed ? 'Expand Saved Papers' : 'Collapse Saved Papers'}
+                </div>
+                ${!this.savedCollapsed ? `
+                <div class="saved-controls">
+                  <input type="text" placeholder="Filter saved papers" class="saved-filter" aria-label="Filter Saved Papers" value="${this.savedFilter}" />
+                  <select class="saved-sort" aria-label="Sort Saved Papers">
+                    <option value="date" ${this.savedSortBy==='date'?'selected':''}>Sort by Date</option>
+                    <option value="category" ${this.savedSortBy==='category'?'selected':''}>Sort by Category</option>
+                  </select>
+                  <button class="export-btn" aria-label="Bulk Export Saved Papers">Bulk Export</button>
+                  <button class="delete-btn" aria-label="Delete Selected Saved Papers">Delete Selected</button>
+                </div>
+                <div class="saved-list">
+                  ${this.getProcessedSavedPapers().map((paper, i) => `
+                    <div class="saved-paper-item ${paper.note ? 'has-note' : ''}">
+                      <input type="checkbox" class="bulk-select" data-index="${i}" ${this.bulkSelected.has(i)?'checked':''} aria-label="Select paper" />
+                      <div class="saved-paper-title">${paper.title}</div>
+                      <div class="saved-paper-authors">${paper.authors.join(', ')}</div>
+                      <div class="saved-paper-meta">${paper.category} • ${paper.date}</div>
+                      <a class="open-link" href="https://arxiv.org/abs/${paper.id.split('/abs/').pop()}" target="_blank" aria-label="Open in arXiv">Open in arXiv</a>
+                      <button class="copy-btn" data-index="${i}" aria-label="Copy Citation">Copy Citation</button>
+                      <button class="note-btn" data-index="${i}" aria-label="Add or Edit Note">Add Note</button>
+                      <button class="favorite-btn" data-index="${i}" aria-label="Toggle Favorite">${paper.favorite ? '★' : '☆'}</button>
+                      <button class="delete-btn" data-index="${i}" aria-label="Delete Paper">Delete</button>
+                      <textarea class="note-area" data-index="${i}" placeholder="Your notes here..." aria-label="Note">${paper.note || ''}</textarea>
+                    </div>
+                  `).join('')}
+                </div>` : ''}
+              </div>
+            </div>`;
+
+          this.$app.innerHTML = sidebarHTML + mainContentHTML;
+
+          // --- Bind events ---
+          const searchInput = this.$app.querySelector('.search-input');
+          if (searchInput) {
+            searchInput.value = '';
+            searchInput.addEventListener('input', debounce((e) => {
+              const q = e.target.value.trim();
+              if (q.length > 0) this.fetchPapers(q);
+            }, 400));
+          }
+          const actionButtons = this.$app.querySelectorAll('.action-buttons button');
+          actionButtons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+              const action = e.currentTarget.getAttribute('data-action');
+              if (action === 'preview' && currentPaper) {
+                window.open(`https://arxiv.org/pdf/${currentPaper.id.split('/abs/').pop()}.pdf`, '_blank');
+              } else {
+                this.handleAction(action);
+              }
+            });
+          });
+          const readMore = this.$app.querySelector('#read-more');
+          if (readMore) {
+            readMore.addEventListener('click', (e) => this.toggleAbstract(e));
+            readMore.addEventListener('keypress', (e) => { if(e.key === 'Enter') this.toggleAbstract(e); });
+          }
+          const categoryTags = this.$app.querySelectorAll('.pill');
+          categoryTags.forEach(tag => {
+            tag.addEventListener('click', (e) => {
+              const category = e.currentTarget.getAttribute('data-category');
+              if (this.activeCategories.has(category)) this.activeCategories.delete(category);
+              else this.activeCategories.add(category);
+              this.render();
+            });
+            // Bind Delete buttons for individual saved papers
+this.$app.querySelectorAll('.delete-btn').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    const idx = Number(e.currentTarget.getAttribute('data-index'));
+    // Remove the paper at index idx from savedPapers
+    let saved = this.getProcessedSavedPapers();
+    // Remove the item from the underlying array
+    saved.splice(idx, 1);
+    this.savedPapers = saved;
+    localStorage.setItem('savedPapers', JSON.stringify(this.savedPapers));
+    this.render();
+    this.showToast('Paper deleted', 'success');
+  });
+});
+
+          });
+          const darkModeToggle = document.getElementById('dark-mode-toggle');
+          if (darkModeToggle) {
+            darkModeToggle.addEventListener('click', () => this.toggleDarkMode());
+          }
+          const highContrastToggle = document.getElementById('high-contrast-toggle');
+          if (highContrastToggle) {
+            highContrastToggle.addEventListener('click', () => this.toggleHighContrast());
+          }
+          const savedFilterInput = this.$app.querySelector('.saved-filter');
+          if (savedFilterInput) {
+            savedFilterInput.addEventListener('input', debounce((e) => {
+              this.savedFilter = e.target.value;
+              this.render();
+            }, 300));
+          }
+          const savedSortSelect = this.$app.querySelector('.saved-sort');
+          if (savedSortSelect) {
+            savedSortSelect.addEventListener('change', (e) => {
+              this.savedSortBy = e.target.value;
+              this.render();
+            });
+          }
+          const exportBtn = this.$app.querySelector('.export-btn');
+          if (exportBtn) {
+            exportBtn.addEventListener('click', () => {
+              const selected = [];
+              this.$app.querySelectorAll('.bulk-select').forEach(cb => {
+                if (cb.checked) selected.push(Number(cb.getAttribute('data-index')));
+              });
+              const papersToExport = selected.length
+                ? selected.map(i => this.getProcessedSavedPapers()[i])
+                : this.getProcessedSavedPapers();
+              const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(papersToExport, null, 2));
+              const a = document.createElement('a');
+              a.setAttribute("href", dataStr);
+              a.setAttribute("download", "saved_papers.json");
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+            });
+          }
+          const deleteBtns = this.$app.querySelectorAll('.delete-btn');
+          deleteBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+              const selected = [];
+              this.$app.querySelectorAll('.bulk-select').forEach(cb => {
+                if (cb.checked) selected.push(Number(cb.getAttribute('data-index')));
+              });
+              if (selected.length) {
+                // Remove selected papers from savedPapers
+                let saved = this.getProcessedSavedPapers();
+                saved = saved.filter((_, idx) => !selected.includes(idx));
+                this.savedPapers = saved;
+                localStorage.setItem('savedPapers', JSON.stringify(this.savedPapers));
+                this.render();
+                this.showToast('Selected papers deleted', 'success');
+              }
+            });
+          });
+          // Copy Citation buttons
+          this.$app.querySelectorAll('.copy-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+              const idx = e.currentTarget.getAttribute('data-index');
+              const paper = this.getProcessedSavedPapers()[idx];
+              this.copyCitation(paper);
+            });
+          });
+          // Note buttons and textareas
+          this.$app.querySelectorAll('.note-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+              const idx = e.currentTarget.getAttribute('data-index');
+              const textarea = this.$app.querySelector(`.note-area[data-index="${idx}"]`);
+              textarea.style.display = textarea.style.display === 'block' ? 'none' : 'block';
+            });
+          });
+          this.$app.querySelectorAll('.note-area').forEach(area => {
+            area.addEventListener('change', (e) => {
+              const idx = e.currentTarget.getAttribute('data-index');
+              const papers = this.getProcessedSavedPapers();
+              papers[idx].note = e.currentTarget.value;
+              this.savedPapers = papers;
+              localStorage.setItem('savedPapers', JSON.stringify(this.savedPapers));
+            });
+          });
+          // Favorite buttons
+          this.$app.querySelectorAll('.favorite-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+              const idx = e.currentTarget.getAttribute('data-index');
+              const papers = this.getProcessedSavedPapers();
+              papers[idx].favorite = !papers[idx].favorite;
+              this.savedPapers = papers;
+              localStorage.setItem('savedPapers', JSON.stringify(this.savedPapers));
+              this.render();
+            });
+          });
+        });
+      }
+
+      // Basic swipe gesture support on mobile for the paper card
+      addSwipeListeners() {
+        const card = document.getElementById('paper-card');
+        if (!card) return;
+        let touchstartX = 0;
+        let touchendX = 0;
+        card.addEventListener('touchstart', e => {
+          touchstartX = e.changedTouches[0].screenX;
+        });
+        card.addEventListener('touchend', e => {
+          touchendX = e.changedTouches[0].screenX;
+          if (touchendX < touchstartX - 50) this.handleAction('skip');
+          else if (touchendX > touchstartX + 50) this.handleAction('save');
+        });
+      }
+
+      showToast(message, type, undoCallback) {
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+        if (undoCallback) {
+          const undoBtn = document.createElement('button');
+          undoBtn.textContent = 'Undo';
+          undoBtn.style.marginLeft = '12px';
+          undoBtn.style.background = 'transparent';
+          undoBtn.style.color = '#fff';
+          undoBtn.style.border = 'none';
+          undoBtn.style.cursor = 'pointer';
+          undoBtn.addEventListener('click', () => {
+            undoCallback();
+            toast.classList.remove('show');
+          });
+          toast.appendChild(undoBtn);
+        }
+        document.body.appendChild(toast);
+        toast.getBoundingClientRect();
+        toast.classList.add('show');
+        setTimeout(() => {
+          toast.classList.remove('show');
+          setTimeout(() => toast.remove(), 300);
+        }, 3000);
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      window.app = new ArxivExplorer();
+      app.init();
+    });
+  </script>
+
+  <!-- Bottom navigation for mobile -->
+  <div class="bottom-nav" aria-label="Mobile Navigation">
+    <button onclick="app.handleAction('save')" aria-label="Save Paper">Save</button>
+    <button onclick="app.handleAction('skip')" aria-label="Skip Paper">Skip</button>
+    <button onclick="window.open('https://arxiv.org/', '_blank')" aria-label="Open arXiv">arXiv</button>
+  </div>
+</body>
+</html>
